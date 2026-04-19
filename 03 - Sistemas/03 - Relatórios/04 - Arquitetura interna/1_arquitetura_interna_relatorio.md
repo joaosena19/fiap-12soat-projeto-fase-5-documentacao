@@ -1,0 +1,335 @@
+# Arquitetura interna - Relatórios
+
+## Visão geral
+
+O serviço de Relatórios segue Clean Architecture com quatro projetos: Domain, Application, Infrastructure e API. É um serviço híbrido: expõe endpoints HTTP para consulta e solicitação de relatórios, e consome mensagens via MassTransit/SQS para geração assíncrona.
+
+![Estrutura da solution](estrutura_solution_relatorio.png)
+
+## Camadas
+
+### Domain (Entities / Enterprise Business Rules)
+
+O aggregate root `ResultadoDiagrama` é o mais complexo dos três serviços. Ele gerencia uma coleção de `RelatorioGerado` (entity filha), além de `ErroResultadoDiagrama` para histórico de falhas e `AnaliseResultado` para os dados vindos do processamento.
+
+```csharp
+[AggregateRoot]
+public class ResultadoDiagrama
+{
+    public Guid Id { get; private set; }
+    public Guid AnaliseDiagramaId { get; private set; }
+    public StatusAnalise Status { get; private set; } = null!;
+    public AnaliseResultado? AnaliseResultado { get; private set; }
+    public List<RelatorioGerado> Relatorios { get; private set; } = new();
+    public List<ErroResultadoDiagrama> Erros { get; private set; } = new();
+    [...]
+
+    public void RegistrarAnalise(AnaliseResultado analiseResultado)
+    {
+        AnaliseResultado = analiseResultado;
+        Status = new StatusAnalise(StatusAnaliseEnum.Analisado);
+        DataUltimaTentativa = new DataUltimaTentativa(DateTimeOffset.UtcNow);
+    }
+
+    public void AdicionarRelatorio(TipoRelatorioEnum tipoRelatorio, ConteudosRelatorio conteudos)
+    {
+        var relatorioExistente = Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipoRelatorio);
+
+        if (relatorioExistente != null)
+            relatorioExistente.ConcluirGeracao(conteudos);
+        else
+            Relatorios.Add(RelatorioGerado.Criar(tipoRelatorio, conteudos));
+
+        AtualizarStatusGeral();
+    }
+
+    public void RegistrarErroRelatorio(TipoRelatorioEnum tipoRelatorio, string mensagem, OrigemErroEnum origemErro)
+    {
+        var relatorioExistente = Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipoRelatorio);
+        relatorioExistente?.MarcarComoErro();
+        Erros.Add(ErroResultadoDiagrama.Criar(tipoRelatorio, mensagem, origemErro, Erros.Count + 1));
+        [...]
+    }
+    [...]
+}
+```
+
+A entity `RelatorioGerado` tem seu próprio ciclo de vida (Pendente → EmGeracao → Concluido/Erro), e o aggregate recalcula seu status geral com base nos estados dos filhos:
+
+```csharp
+public class RelatorioGerado
+{
+    public Guid Id { get; private set; }
+    public TipoRelatorio Tipo { get; private set; } = null!;
+    public StatusRelatorio Status { get; private set; } = null!;
+    public Conteudos Conteudos { get; private set; } = null!;
+    [...]
+
+    public static RelatorioGerado Criar(TipoRelatorioEnum tipo, Conteudos conteudos)
+    {
+        return new RelatorioGerado(Uuid.NewSequential(), new TipoRelatorio(tipo), new StatusRelatorio(StatusRelatorioEnum.Concluido), conteudos, new DataGeracao(DateTimeOffset.UtcNow));
+    }
+    [...]
+}
+```
+
+### Application (Use Cases / Application Business Rules)
+
+O serviço de Relatórios possui quatro use cases:
+
+- `SolicitarGeracaoRelatoriosUseCase` — chamado via HTTP, avalia quais relatórios precisam ser gerados e publica mensagens
+- `GerarRelatorioUseCase` — chamado via Consumer, gera o conteúdo usando Strategy Pattern
+- `ListarResultadosDiagramaUseCase` — listagem com status detalhado por relatório
+- `BuscarResultadoDiagramaPorIdUseCase` — busca individual
+
+O `GerarRelatorioUseCase` usa o contrato `IRelatorioStrategy` para delegar a geração ao formato correto:
+
+```csharp
+public class GerarRelatorioUseCase
+{
+    public async Task ExecutarAsync(Guid analiseDiagramaId, TipoRelatorioEnum tipoRelatorio, IResultadoDiagramaGateway gateway, IRelatorioStrategyResolver strategyResolver, IMetricsService metrics, IAppLogger logger)
+    {
+        [...]
+        var resultadoDiagrama = await gateway.ObterPorAnaliseDiagramaIdAsync(analiseDiagramaId);
+        [...]
+        var strategy = strategyResolver.Resolver(tipoRelatorio);
+        var conteudos = await strategy.GerarAsync(resultadoDiagrama, resultadoDiagrama.AnaliseResultado!);
+
+        resultadoDiagrama.AdicionarRelatorio(tipoRelatorio, conteudos);
+        await gateway.SalvarAsync(resultadoDiagrama);
+        [...]
+    }
+}
+```
+
+O `SolicitarGeracaoRelatoriosUseCase` analisa o estado atual dos relatórios e decide quais precisam ser gerados, quais já estão prontos e quais já estão em andamento:
+
+```csharp
+public class SolicitarGeracaoRelatoriosUseCase
+{
+    public async Task ExecutarAsync(Guid analiseDiagramaId, IReadOnlyCollection<TipoRelatorioEnum> tiposRelatorio, IResultadoDiagramaGateway gateway, IRelatorioMessagePublisher messagePublisher, ISolicitarGeracaoRelatoriosPresenter presenter, IAppLogger logger)
+    {
+        [...]
+        var resultados = new List<ResultadoSolicitacaoRelatorioDto>();
+
+        foreach (var tipo in tiposRelatorio)
+        {
+            var relatorioExistente = resultadoDiagrama.Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipo);
+
+            if (relatorioExistente?.Status.Valor == StatusRelatorioEnum.Concluido)
+                resultados.Add(new ResultadoSolicitacaoRelatorioDto { Tipo = tipo, Resultado = ResultadoSolicitacaoGeracaoRelatorioEnum.Concluido });
+            else if (relatorioExistente?.Status.Valor == StatusRelatorioEnum.EmGeracao)
+                resultados.Add(new ResultadoSolicitacaoRelatorioDto { Tipo = tipo, Resultado = ResultadoSolicitacaoGeracaoRelatorioEnum.JaEmAndamento });
+            else
+                tiposParaGerar.Add(tipo);
+        }
+        [...]
+    }
+}
+```
+
+Os contratos definem dois padrões de apresentação: Presenters para os endpoints HTTP e MessagePublisher para a comunicação assíncrona:
+
+```
+Application/
+├── Contracts/
+│   ├── Armazenamento/
+│   │   └── IArmazenamentoArquivoService.cs
+│   ├── Gateways/
+│   │   └── IResultadoDiagramaGateway.cs
+│   ├── Messaging/
+│   │   └── IRelatorioMessagePublisher.cs
+│   ├── Monitoramento/
+│   │   ├── IAppLogger.cs
+│   │   └── IMetricsService.cs
+│   ├── Presenters/
+│   │   ├── IBasePresenter.cs
+│   │   ├── IBuscarResultadoDiagramaPresenter.cs
+│   │   ├── IListarResultadosDiagramaPresenter.cs
+│   │   └── ISolicitarGeracaoRelatoriosPresenter.cs
+│   └── Relatorios/
+│       ├── IRelatorioStrategy.cs
+│       └── IRelatorioStrategyResolver.cs
+├── ResultadoDiagrama/
+│   ├── Dtos/
+│   └── UseCases/
+│       ├── BuscarResultadoDiagramaPorIdUseCase.cs
+│       ├── GerarRelatorioUseCase.cs
+│       ├── ListarResultadosDiagramaUseCase.cs
+│       └── SolicitarGeracaoRelatoriosUseCase.cs
+```
+
+### Infrastructure (Interface Adapters — implementação)
+
+O Handler segue o mesmo padrão dos outros serviços, instanciando o UseCase e criando o Logger:
+
+```csharp
+public class ResultadoDiagramaHandler : BaseHandler
+{
+    public ResultadoDiagramaHandler(ILoggerFactory loggerFactory) : base(loggerFactory) { }
+
+    public async Task SolicitarGeracaoRelatoriosAsync(Guid analiseDiagramaId, IReadOnlyCollection<TipoRelatorioEnum> tiposRelatorio, IResultadoDiagramaGateway gateway, IRelatorioMessagePublisher messagePublisher, ISolicitarGeracaoRelatoriosPresenter presenter)
+    {
+        var useCase = new SolicitarGeracaoRelatoriosUseCase();
+        var logger = CriarLoggerPara<SolicitarGeracaoRelatoriosUseCase>();
+
+        await useCase.ExecutarAsync(analiseDiagramaId, tiposRelatorio, gateway, messagePublisher, presenter, logger);
+    }
+    [...]
+}
+```
+
+A geração de relatórios usa **Strategy Pattern**. O `IRelatorioStrategyResolver` é implementado por `RelatorioStrategyResolver`, que recebe todas as strategies via DI e seleciona a correta pelo `TipoRelatorioEnum`:
+
+```csharp
+public class RelatorioStrategyResolver : IRelatorioStrategyResolver
+{
+    private readonly IEnumerable<IRelatorioStrategy> _strategies;
+
+    public RelatorioStrategyResolver(IEnumerable<IRelatorioStrategy> strategies)
+    {
+        _strategies = strategies;
+    }
+
+    public IRelatorioStrategy Resolver(TipoRelatorioEnum tipoRelatorio)
+    {
+        return _strategies.FirstOrDefault(item => item.TipoRelatorio == tipoRelatorio)
+            ?? throw new InvalidOperationException($"Strategy de relatório não encontrada para o tipo '{tipoRelatorio}'");
+    }
+}
+```
+
+Existem três strategies, cada uma gerando o relatório em um formato diferente:
+
+| Strategy | Formato | Armazenamento |
+|---|---|---|
+| `RelatorioJsonStrategy` | JSON | Conteúdo inline no banco |
+| `RelatorioMarkdownStrategy` | Markdown | Conteúdo inline no banco |
+| `RelatorioPdfStrategy` | PDF (via QuestPDF) | Upload para S3, URL no banco |
+
+A strategy de PDF gera o documento com QuestPDF e faz upload para o S3:
+
+```csharp
+public class RelatorioPdfStrategy : BaseRelatorioStrategy
+{
+    private readonly IArmazenamentoArquivoService _armazenamentoArquivoService;
+    [...]
+
+    protected override async Task<ConteudosRelatorio> GerarConteudoAsync(ResultadoDiagrama resultadoDiagrama, AnaliseResultado analise)
+    {
+        var nomeArquivo = $"{resultadoDiagrama.AnaliseDiagramaId}/relatorio.pdf";
+        [...]
+        var documento = new RelatorioAnalisePdfDocumento(analise);
+        pdfBytes = documento.GeneratePdf();
+        [...]
+        var url = await _armazenamentoArquivoService.ArmazenarAsync(resultadoDiagrama.AnaliseDiagramaId, pdfBytes, nomeArquivo, "application/pdf");
+
+        return ConteudosRelatorio.Vazio().Adicionar(ConteudoRelatorioChaves.Url, url);
+    }
+}
+```
+
+Os Consumers instanciam as dependências diretamente, como nos outros serviços. O `SolicitarGeracaoRelatoriosConsumer` itera sobre os tipos solicitados e chama o UseCase para cada um:
+
+```csharp
+public class SolicitarGeracaoRelatoriosConsumer : IConsumer<SolicitarGeracaoRelatoriosDto>
+{
+    private readonly AppDbContext _context;
+    private readonly IRelatorioStrategyResolver _strategyResolver;
+    private readonly ILoggerFactory _loggerFactory;
+    [...]
+
+    public async Task Consume(ConsumeContext<SolicitarGeracaoRelatoriosDto> context)
+    {
+        [...]
+        var gateway = new ResultadoDiagramaRepository(_context);
+        var metrics = new NewRelicMetricsService();
+        var useCase = new GerarRelatorioUseCase();
+        [...]
+
+        foreach (var tipoRelatorio in mensagem.TiposRelatorio.Distinct())
+            await useCase.ExecutarAsync(mensagem.AnaliseDiagramaId, tipoRelatorio, gateway, _strategyResolver, metrics, logger);
+        [...]
+    }
+}
+```
+
+O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento, registra no aggregate e dispara automaticamente a geração dos relatórios padrão:
+
+```csharp
+public async Task Consume(ConsumeContext<ProcessamentoDiagramaAnalisadoDto> context)
+{
+    [...]
+    var analiseResultado = AnaliseResultado.Criar(mensagem.DescricaoAnalise, mensagem.ComponentesIdentificados, mensagem.RiscosArquiteturais, mensagem.RecomendacoesBasicas);
+
+    resultadoDiagrama.RegistrarAnalise(analiseResultado);
+    await gateway.SalvarAsync(resultadoDiagrama);
+
+    await _messagePublisher.PublicarSolicitacaoGeracaoAsync(mensagem.AnaliseDiagramaId, TiposRelatorioPadrao.Tipos);
+    [...]
+}
+```
+
+### API (Frameworks & Drivers)
+
+O endpoint instancia Gateway, Presenter e Handler diretamente, sem container de DI:
+
+```csharp
+[HttpGet("{analiseDiagramaId:guid}")]
+public async Task<IActionResult> BuscarPorAnaliseDiagramaId(Guid analiseDiagramaId)
+{
+    var gateway = new ResultadoDiagramaRepository(_context);
+    var presenter = new BuscarResultadoDiagramaPresenter();
+    var handler = new ResultadoDiagramaHandler(_loggerFactory);
+
+    await handler.BuscarPorAnaliseDiagramaIdAsync(analiseDiagramaId, gateway, presenter);
+
+    return presenter.ObterResultado();
+}
+```
+
+O Presenter traduz o aggregate para DTO e define o HTTP status code. O `SolicitarGeracaoRelatoriosPresenter` calcula o status HTTP final com base nos resultados individuais de cada tipo de relatório — retornando 200, 202 ou 207 (Multi-Status):
+
+```csharp
+public class SolicitarGeracaoRelatoriosPresenter : BasePresenter, ISolicitarGeracaoRelatoriosPresenter
+{
+    public void ApresentarSucesso(ResultadoSolicitacaoRelatoriosDto resultado)
+    {
+        [...]
+        var statusCodeHttp = DeterminarStatusHttp(itensResposta.Select(item => item.StatusHttp).ToList());
+
+        _resultado = statusCodeHttp switch
+        {
+            StatusCodes.Status202Accepted => new ObjectResult(resposta) { StatusCode = StatusCodes.Status202Accepted },
+            StatusCodes.Status207MultiStatus => new ObjectResult(resposta) { StatusCode = StatusCodes.Status207MultiStatus },
+            _ => new OkObjectResult(resposta)
+        };
+        [...]
+    }
+}
+```
+
+## Pontos de entrada
+
+O serviço de Relatórios tem dois pontos de entrada paralelos:
+
+1. **API HTTP** — endpoints REST no `RelatorioController` para listagem, busca e solicitação de relatórios. O Controller instancia Handler, Gateway e Presenter.
+2. **Consumers MassTransit** — processam mensagens assíncronas. O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento e o `SolicitarGeracaoRelatoriosConsumer` gera relatórios nos formatos solicitados.
+
+Ambos seguem o mesmo padrão de Clean Architecture.
+
+## Fluxo completo — Geração de relatórios
+
+1. O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento
+2. O Consumer registra `AnaliseResultado` no aggregate `ResultadoDiagrama` via Gateway
+3. O Consumer publica `SolicitarGeracaoRelatoriosDto` com os tipos padrão (JSON, Markdown, PDF)
+4. O `SolicitarGeracaoRelatoriosConsumer` recebe a mensagem e itera sobre os tipos
+5. Para cada tipo, o `GerarRelatorioUseCase` resolve a strategy adequada via `IRelatorioStrategyResolver`
+6. A strategy gera o conteúdo: JSON e Markdown são armazenados inline, PDF é enviado ao S3
+7. O aggregate `ResultadoDiagrama.AdicionarRelatorio(...)` adiciona o `RelatorioGerado` e recalcula o status geral
+
+O usuário também pode solicitar geração manualmente via `POST /api/relatorio/{analiseDiagramaId}`, que avalia quais relatórios precisam ser (re)gerados e publica a mensagem correspondente.
+
+---
+Anterior: [Banco de dados - Relatórios](../03%20-%20Banco%20de%20dados/1_banco_de_dados_relatorio.md)  
+Próximo: [Infraestrutura, Kubernetes e Escalabilidade](../../../04%20-%20Infraestrutura,%20Kubernetes%20e%20Escalabilidade/1_infraestrutura.md)

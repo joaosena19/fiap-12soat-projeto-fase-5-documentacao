@@ -90,4 +90,5 @@ Se for sua primeira leitura, siga a navegação "Próximo" ao final de cada arqu
     1. Veja [Segurança]([a definir])
 
 ---
-Anterior: [Introdução](1_introducao.md)
+Anterior: [Introdução](1_introducao.md)  
+Próximo: [Diagrama de componentes](../02%20-%20Diagrama%20de%20componentes/1_diagrama_de_componentes.md)
