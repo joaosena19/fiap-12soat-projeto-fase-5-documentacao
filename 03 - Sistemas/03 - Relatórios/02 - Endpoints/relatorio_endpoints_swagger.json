@@ -1,0 +1,471 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Relatório de Análises API",
+    "description": "API para consulta de relatórios de análises de diagramas de componentes",
+    "contact": {
+      "name": "João Dainese",
+      "email": "joaosenadainese@gmail.com"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/relatorio": {
+      "get": {
+        "tags": [
+          "Relatorio"
+        ],
+        "summary": "Lista todos os resultados de diagramas com status detalhado por relatório.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RetornoListagemResultadoDiagramaDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/relatorio/{analiseDiagramaId}": {
+      "get": {
+        "tags": [
+          "Relatorio"
+        ],
+        "summary": "Busca uma análise de diagrama pelo AnaliseDiagramaId.",
+        "parameters": [
+          {
+            "name": "analiseDiagramaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetornoResultadoDiagramaDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Relatorio"
+        ],
+        "summary": "Solicita a geração de relatórios pendentes ou com erro.",
+        "parameters": [
+          {
+            "name": "analiseDiagramaId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitarRelatoriosRequestDto"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitarRelatoriosRequestDto"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitarRelatoriosRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoSolicitacaoRelatoriosDto"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoSolicitacaoRelatoriosDto"
+                }
+              }
+            }
+          },
+          "207": {
+            "description": "Multi-Status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoSolicitacaoRelatoriosDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErroResultadoDiagramaDto": {
+        "type": "object",
+        "properties": {
+          "mensagem": {
+            "type": "string",
+            "nullable": true
+          },
+          "tipoRelatorio": {
+            "$ref": "#/components/schemas/TipoRelatorioEnum"
+          },
+          "origemErro": {
+            "$ref": "#/components/schemas/OrigemErroEnum"
+          },
+          "numeroTentativa": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "dataOcorrencia": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "statusCode": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false,
+        "description": "DTO para respostas de erro padronizadas da API"
+      },
+      "ItemResultadoSolicitacaoRelatorioDto": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoRelatorioEnum"
+          },
+          "resultado": {
+            "$ref": "#/components/schemas/ResultadoSolicitacaoGeracaoRelatorioEnum"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrigemErroEnum": {
+        "enum": [
+          "Processamento",
+          "Llm",
+          "LlmValidacao",
+          "Armazenamento",
+          "GeracaoRelatorio",
+          "Desconhecido"
+        ],
+        "type": "string"
+      },
+      "RelatorioDto": {
+        "type": "object",
+        "properties": {
+          "tipo": {
+            "$ref": "#/components/schemas/TipoRelatorioEnum"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusRelatorioEnum"
+          },
+          "conteudos": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "dataGeracao": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResultadoSolicitacaoGeracaoRelatorioEnum": {
+        "enum": [
+          "Concluido",
+          "AceitoParaGeracao",
+          "JaEmAndamento",
+          "AnaliseNaoDisponivel"
+        ],
+        "type": "string"
+      },
+      "ResultadoSolicitacaoRelatoriosDto": {
+        "type": "object",
+        "properties": {
+          "analiseDiagramaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relatorios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemResultadoSolicitacaoRelatorioDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetornoListagemResultadoDiagramaDto": {
+        "type": "object",
+        "properties": {
+          "analiseDiagramaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusAnaliseEnum"
+          },
+          "relatoriosDisponiveis": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "quantidadeErros": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dataCriacao": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataUltimaTentativa": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetornoResultadoDiagramaDto": {
+        "type": "object",
+        "properties": {
+          "analiseDiagramaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusAnaliseEnum"
+          },
+          "relatorios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelatorioDto"
+            },
+            "nullable": true
+          },
+          "erros": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ErroResultadoDiagramaDto"
+            },
+            "nullable": true
+          },
+          "dataCriacao": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dataUltimaTentativa": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SolicitarRelatoriosRequestDto": {
+        "type": "object",
+        "properties": {
+          "tiposRelatorio": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TipoRelatorioEnum"
+            },
+            "description": "Lista de tipos de relatório a gerar. Valores possíveis: Json, Markdown, Pdf.",
+            "nullable": true,
+            "example": [
+              "Markdown",
+              "Pdf"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "description": "Requisição para solicitar geração de relatórios pendentes ou com erro."
+      },
+      "StatusAnaliseEnum": {
+        "enum": [
+          "Recebido",
+          "EmProcessamento",
+          "Analisado",
+          "Erro",
+          "Rejeitado"
+        ],
+        "type": "string"
+      },
+      "StatusRelatorioEnum": {
+        "enum": [
+          "NaoSolicitado",
+          "Automatico",
+          "Solicitado",
+          "EmProcessamento",
+          "Concluido",
+          "Erro"
+        ],
+        "type": "string"
+      },
+      "TipoRelatorioEnum": {
+        "enum": [
+          "Json",
+          "Markdown",
+          "Pdf"
+        ],
+        "type": "string"
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "apiKey",
+        "description": "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
+        "name": "Authorization",
+        "in": "header"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [ ]
+    }
+  ]
+}
