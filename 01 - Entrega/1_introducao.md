@@ -11,7 +11,7 @@ Email: joaosenadainese@gmail.com
 
 # Vídeo
 
-Disponível em [Youtube]([a definir]) e em [Google Drive]([a definir]).
+Disponível em [Youtube](https://youtu.be/VgaUmuyQxWs) e em [Google Drive](https://drive.google.com/file/d/1IQNXSuPaC3zgiSJ-C9hmiBFmD2b8KMq9/view?usp=sharing).
 
 # Documentação
 

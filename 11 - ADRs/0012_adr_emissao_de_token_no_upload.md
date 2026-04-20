@@ -14,7 +14,7 @@ Considerei criar um serviço de autenticação dedicado (Lambda, microsserviço 
 
 O Upload em específico foi o serviço selecionado pois ele é a porta de entrada do sistema, o primeiro contato é através do envio do diagrama.
 
-O endpoint `POST /api/auth/token` recebe o `clientId` e retorna o JWT com claims `sub`, `client_id`, `jti` e `iat`.
+O endpoint `POST /api/autenticacao/token` recebe o `clientId` e retorna o JWT com claims `sub`, `client_id`, `jti` e `iat`.
 
 ## Decisão
 

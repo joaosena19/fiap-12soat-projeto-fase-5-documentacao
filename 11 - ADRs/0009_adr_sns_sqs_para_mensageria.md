@@ -32,7 +32,7 @@ Veja mais em [Comunicação entre serviços](../06%20-%20Comunicação%20entre%2
 
 **Negativas:**
 
-* Vendor lock-in — trocar de broker exigiria a mensageria. O MassTransit (Veja [ADR 0010 - MassTransit como Abstração de Mensageria](0010_adr_masstransit_como_abstracao.md)) mitiga parcialmente esse risco no código.
+* Vendor lock-in — trocar de broker exigiria alterar a mensageria. O MassTransit (Veja [ADR 0010 - MassTransit como Abstração de Mensageria](0010_adr_masstransit_como_abstracao.md)) mitiga parcialmente esse risco no código.
 
 ---
 Anterior: [ADR 0008 - Repositório de Infra Centralizado + Banco nos Repos](0008_adr_repo_de_infra_e_infra_nos_repos.md)  

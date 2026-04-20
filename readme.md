@@ -11,7 +11,7 @@ Email: joaosenadainese@gmail.com
 
 # Introdução
 
-Este projeto foi realizado como Tech Challenge da quinta fase do curso de Pós-Graduação em Software Architecture, ministrado pela FIAP. [a definir]
+Este projeto foi realizado como Tech Challenge da quinta fase do curso de Pós-Graduação em Software Architecture, ministrado pela FIAP. O objetivo dessa fase foi integrar os temas arquitetura de software e IA, consolidando todos os conhecimentos de arquitetura aprendidos ao longo do curso, e aplicá-los em um cenário prático com uma solução de análise de diagramas via IA.
 
 Este repositório inteiro é dedicado à documentação do projeto, incluindo diagramas, decisões arquiteturais e instruções de uso.
 
@@ -23,4 +23,4 @@ Além disso, cada arquivo contém links de navegação para os próximos conteú
 
 # Vídeo de apresentação
 
-Disponível em [Youtube]([a definir]) e em [Google Drive]([a definir]).
+Disponível em [Youtube](https://youtu.be/VgaUmuyQxWs) e em [Google Drive](https://drive.google.com/file/d/1IQNXSuPaC3zgiSJ-C9hmiBFmD2b8KMq9/view?usp=sharing).

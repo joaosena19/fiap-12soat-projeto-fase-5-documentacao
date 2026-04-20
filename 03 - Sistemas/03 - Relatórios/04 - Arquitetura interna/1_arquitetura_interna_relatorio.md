@@ -228,8 +228,39 @@ Existem três strategies, cada uma gerando o relatório em um formato diferente:
 | Strategy | Formato | Armazenamento |
 |---|---|---|
 | `RelatorioJsonStrategy` | JSON | Conteúdo inline no banco |
-| `RelatorioMarkdownStrategy` | Markdown | Conteúdo inline no banco |
+| `RelatorioMarkdownStrategy` | Markdown | Conteúdo inline no banco + S3 |
 | `RelatorioPdfStrategy` | PDF (via QuestPDF) | Upload para S3, URL no banco |
+
+### Extensibilidade via Strategy Pattern
+
+Adicionar um novo formato de relatório exige apenas dois passos:
+
+1. **Criar a nova strategy** — implementar `BaseRelatorioStrategy`, definindo `TipoRelatorio` e o método `GerarConteudoAsync`. O logging, a cronometragem e a validação de pré-condições (ex: `AnaliseResultado` não-nulo) já são herdados da classe base.
+2. **Registrar no DI** — adicionar a nova classe como `IRelatorioStrategy` no container. O `RelatorioStrategyResolver` já recebe `IEnumerable<IRelatorioStrategy>` via injeção de dependência, portanto a nova strategy é encontrada automaticamente por `TipoRelatorioEnum`.
+
+Nenhuma alteração é necessária no `GerarRelatorioUseCase`, no `SolicitarGeracaoRelatoriosConsumer`, no aggregate `ResultadoDiagrama` ou nos Consumers. O único código que muda é o da nova strategy e a linha de registro no DI. Se o novo formato precisar ser gerado automaticamente após cada análise, basta adicioná-lo na constante `TiposRelatorioPadrao.Tipos`.
+
+A `BaseRelatorioStrategy` encapsula o padrão Template Method: executa `GerarConteudoAsync` (implementação específica de cada formato) dentro de um bloco com logging estruturado e cronômetro, garantindo que toda strategy nova já nasce com observabilidade:
+
+```csharp
+public async Task<ConteudosRelatorio> GerarAsync(ResultadoDiagrama resultadoDiagrama)
+{
+    var cronometro = Stopwatch.StartNew();
+    var analise = resultadoDiagrama.AnaliseResultado ?? throw new InvalidOperationException(...);
+
+    CriarLoggerContextualizado(resultadoDiagrama).LogDebug("Iniciando geração...");
+
+    var resultado = await GerarConteudoAsync(resultadoDiagrama, analise);
+
+    CriarLoggerContextualizado(resultadoDiagrama).LogDebug("Relatório gerado em {DuracaoMs}ms", cronometro.ElapsedMilliseconds);
+
+    return resultado;
+}
+
+protected abstract Task<ConteudosRelatorio> GerarConteudoAsync(ResultadoDiagrama resultadoDiagrama, AnaliseResultado analise);
+```
+
+Cada strategy decide como armazenar o conteúdo gerado: inline no banco (JSON, Markdown), no S3 via `IArmazenamentoArquivoService` (Markdown, PDF), ou ambos.
 
 A strategy de PDF gera o documento com QuestPDF e faz upload para o S3:
 
