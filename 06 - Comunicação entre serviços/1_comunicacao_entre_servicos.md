@@ -2,7 +2,7 @@
 
 ## Visão geral
 
-Os três serviços (Upload, Processamento, Relatório) se comunicam exclusivamente por mensageria assíncrona via **MassTransit** com **Amazon SNS/SQS**. Não existe comunicação HTTP direta entre eles.
+Os três serviços (Upload, Processamento, Relatório) se comunicam exclusivamente por mensageria assíncrona via **MassTransit** com **AWS SNS/SQS**. Não existe comunicação HTTP direta entre eles.
 
 O diagrama C2 (Containers) mostra as conexões entre os serviços:
 
@@ -10,9 +10,9 @@ O diagrama C2 (Containers) mostra as conexões entre os serviços:
 
 ## Tecnologias
 
-- **MassTransit** como abstração de mensageria sobre Amazon SQS/SNS
-- **Amazon SNS** (Simple Notification Service) como tópicos pub/sub
-- **Amazon SQS** (Simple Queue Service) como filas de consumo
+- **MassTransit** como abstração de mensageria sobre AWS SQS/SNS
+- **AWS SNS** (Simple Notification Service) como tópicos pub/sub
+- **AWS SQS** (Simple Queue Service) como filas de consumo
 - **JSON** como formato de serialização (camelCase, com `JsonStringEnumConverter`)
 - **CorrelationId** propagado automaticamente via filtros MassTransit (`PublishCorrelationIdFilter`, `SendCorrelationIdFilter`, `ConsumeCorrelationIdFilter`)
 

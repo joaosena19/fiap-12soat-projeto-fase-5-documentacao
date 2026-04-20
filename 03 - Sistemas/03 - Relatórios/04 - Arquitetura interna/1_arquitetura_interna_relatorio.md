@@ -4,7 +4,7 @@
 
 O serviço de Relatórios segue Clean Architecture com quatro projetos: Domain, Application, Infrastructure e API. É um serviço híbrido: expõe endpoints HTTP para consulta e solicitação de relatórios, e consome mensagens via MassTransit/SQS para geração assíncrona.
 
-![Estrutura da solution](estrutura_solution_relatorio.png)
+![Estrutura da solution](Anexos/estrutura_solution_relatorio.png)
 
 ## Camadas
 
@@ -278,7 +278,7 @@ public class SolicitarGeracaoRelatoriosConsumer : IConsumer<SolicitarGeracaoRela
 }
 ```
 
-O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento, registra no aggregate e dispara automaticamente a geração dos relatórios padrão:
+O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do Processamento e dispara a geração automática dos relatórios padrão (detalhes do fluxo em [Funcionamento e fluxos](../01%20-%20Funcionamento%20e%20fluxos/1_funcionamento_e_fluxos.md)):
 
 ```csharp
 public async Task Consume(ConsumeContext<ProcessamentoDiagramaAnalisadoDto> context)
@@ -312,7 +312,7 @@ public async Task<IActionResult> BuscarPorAnaliseDiagramaId(Guid analiseDiagrama
 }
 ```
 
-O Presenter traduz o aggregate para DTO e define o HTTP status code. O `SolicitarGeracaoRelatoriosPresenter` calcula o status HTTP final com base nos resultados individuais de cada tipo de relatório — retornando 200, 202 ou 207 (Multi-Status):
+O Presenter traduz o aggregate para DTO e define o HTTP status code. O `SolicitarGeracaoRelatoriosPresenter` determina o status HTTP com base nos resultados individuais (200, 202 ou 207 Multi-Status — detalhes em [Funcionamento e fluxos](../01%20-%20Funcionamento%20e%20fluxos/1_funcionamento_e_fluxos.md)):
 
 ```csharp
 public class SolicitarGeracaoRelatoriosPresenter : BasePresenter, ISolicitarGeracaoRelatoriosPresenter
@@ -332,27 +332,6 @@ public class SolicitarGeracaoRelatoriosPresenter : BasePresenter, ISolicitarGera
     }
 }
 ```
-
-## Pontos de entrada
-
-O serviço de Relatórios tem dois pontos de entrada paralelos:
-
-1. **API HTTP** — endpoints REST no `RelatorioController` para listagem, busca e solicitação de relatórios. O Controller instancia Handler, Gateway e Presenter.
-2. **Consumers MassTransit** — processam mensagens assíncronas. O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento e o `SolicitarGeracaoRelatoriosConsumer` gera relatórios nos formatos solicitados.
-
-Ambos seguem o mesmo padrão de Clean Architecture.
-
-## Fluxo completo — Geração de relatórios
-
-1. O `ProcessamentoDiagramaAnalisadoConsumer` recebe a análise do serviço de Processamento
-2. O Consumer registra `AnaliseResultado` no aggregate `ResultadoDiagrama` via Gateway
-3. O Consumer publica `SolicitarGeracaoRelatoriosDto` com os tipos padrão (JSON, Markdown, PDF)
-4. O `SolicitarGeracaoRelatoriosConsumer` recebe a mensagem e itera sobre os tipos
-5. Para cada tipo, o `GerarRelatorioUseCase` resolve a strategy adequada via `IRelatorioStrategyResolver`
-6. A strategy gera o conteúdo: JSON e Markdown são armazenados inline, PDF é enviado ao S3
-7. O UseCase chama `resultadoDiagrama.ConcluirRelatorio(...)` no aggregate e persiste
-
-O usuário também pode solicitar geração manualmente via `POST /api/relatorio/{analiseDiagramaId}`, que avalia quais relatórios precisam ser (re)gerados e publica a mensagem correspondente.
 
 ---
 Anterior: [Banco de dados - Relatórios](../03%20-%20Banco%20de%20dados/1_banco_de_dados_relatorio.md)  

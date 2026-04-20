@@ -4,7 +4,7 @@
 
 O serviço de Processamento segue Clean Architecture com quatro projetos: Domain, Application, Infrastructure e Worker. A diferença fundamental em relação ao serviço de Upload é o ponto de entrada: aqui não existe API HTTP. O Worker consome mensagens via MassTransit/SQS, e o Consumer instancia os componentes de Clean Architecture da mesma forma que um endpoint faria.
 
-![Estrutura da solution](estrutura_solution_processamento.png)
+![Estrutura da solution](Anexos/estrutura_solution_processamento.png)
 
 ## Camadas
 
@@ -67,7 +67,7 @@ O value object `StatusProcessamento` valida que o valor informado pertence ao en
 
 ### Application (Use Cases / Application Business Rules)
 
-O UseCase `ProcessarDiagramaUseCase` orquestra o fluxo completo: obtenção do aggregate, validação, chamada ao serviço de LLM e tratamento tripartido do resultado (sucesso, rejeição, falha).
+O UseCase `ProcessarDiagramaUseCase` é o ponto central da camada de aplicação: obtém o aggregate, valida dados, delega ao serviço de LLM e trata o resultado (sucesso, rejeição, falha).
 
 ```csharp
 public class ProcessarDiagramaUseCase
@@ -120,7 +120,7 @@ Um aspecto importante: **não existem Presenters neste serviço**. O Worker não
 
 ### Infrastructure (Interface Adapters — implementação)
 
-O Handler funciona como o "Controller" da Clean Architecture. Ele vai além de simplesmente instanciar o UseCase — implementa lógica de **deduplicação** e **recuperação de dados** que pertence à fronteira entre infraestrutura e aplicação:
+O Handler funciona como o "Controller" da Clean Architecture. Além de instanciar o UseCase, ele implementa lógica de **deduplicação** e **recuperação de dados** na fronteira entre infraestrutura e aplicação (detalhes em [Funcionamento e fluxos](../01%20-%20Funcionamento%20e%20fluxos/1_funcionamento_e_fluxos.md)):
 
 ```csharp
 public class ProcessamentoDiagramaHandler : BaseHandler
@@ -148,9 +148,7 @@ public class ProcessamentoDiagramaHandler : BaseHandler
 }
 ```
 
-O Handler verifica se já existe um processamento em estado terminal (concluído, rejeitado, em andamento) e descarta duplicatas. Se a mensagem veio sem URL do arquivo (cenário de retry), tenta recuperar do registro já existente no banco.
-
-O `DiagramaAnaliseService` é a implementação de `IDiagramaAnaliseService` e contém a integração com LLM. Ele implementa fallback entre múltiplos modelos de linguagem configurados e usa Polly para resiliência (retry com backoff exponencial, circuit breaker):
+O `DiagramaAnaliseService` implementa `IDiagramaAnaliseService` e contém a integração com LLM. Ele baixa a imagem do S3 via `IArquivoDiagramaDownloader`, tenta múltiplos modelos em sequência de fallback e usa Polly para retry com backoff exponencial (detalhes da estratégia de resiliência em [Funcionamento e fluxos](../01%20-%20Funcionamento%20e%20fluxos/1_funcionamento_e_fluxos.md)):
 
 ```csharp
 public class DiagramaAnaliseService : IDiagramaAnaliseService
@@ -164,7 +162,6 @@ public class DiagramaAnaliseService : IDiagramaAnaliseService
 
     public async Task<ResultadoAnaliseDto> AnalisarDiagramaAsync(Guid analiseDiagramaId, string nomeFisico, string localizacaoUrl, string extensao)
     {
-        var cronometro = Stopwatch.StartNew();
         [...]
         byte[] conteudoArquivo;
         try
@@ -179,45 +176,6 @@ public class DiagramaAnaliseService : IDiagramaAnaliseService
 
         var resultado = await TentarAnalisarComFallbackAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao);
         [...]
-        return resultado;
-    }
-
-    private async Task<ResultadoAnaliseDto> TentarAnalisarComFallbackAsync(Guid analiseDiagramaId, string nomeFisico, byte[] conteudoArquivo, string extensao)
-    {
-        var modelos = _opcoes.Modelos;
-        var tentativasTotal = 0;
-
-        for (var i = 0; i < modelos.Count; i++)
-        {
-            var modelo = modelos[i];
-            var client = _clientFactory.CriarPara(modelo);
-            [...]
-            try
-            {
-                var resultado = await ExecutarAnaliseComResilienciaAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao, client, tentativas => tentativasModelo = tentativas);
-                tentativasTotal += tentativasModelo;
-                return resultado with { TentativasRealizadas = tentativasTotal };
-            }
-            catch (LlmIndisponivelException ex) { [...] }
-            catch (LlmPermanentException ex) { [...] }
-            catch (LlmTransientException ex) { [...] }
-        }
-        [...]
-    }
-
-    private async Task<ResultadoAnaliseDto> ExecutarAnaliseComResilienciaAsync(Guid analiseDiagramaId, string nomeFisico, byte[] conteudoArquivo, string extensao, IDiagramaAnaliseClient client, Action<int> atualizarTentativas)
-    {
-        var tentativasRealizadas = 0;
-
-        var resultado = await _pipeline.ExecuteAsync(async cancellationToken =>
-        {
-            tentativasRealizadas++;
-            atualizarTentativas(tentativasRealizadas);
-            [...]
-            return await client.AnalisarDiagramaAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao);
-        }, CancellationToken.None);
-
-        return resultado with { TentativasRealizadas = tentativasRealizadas };
     }
     [...]
 }
@@ -250,21 +208,7 @@ public class UploadDiagramaConcluidoConsumer : IConsumer<UploadDiagramaConcluido
 }
 ```
 
-O `IDiagramaAnaliseService` é injetado via DI do .NET no Consumer por ser mais complexo (requer configuração de múltiplos modelos, pipeline do Polly, downloader). O Handler, Gateway e Metrics são instanciados diretamente.
-
-O MassTransit é configurado com processamento sequencial (`ConcurrentMessageLimit = 1`, `PrefetchCount = 1`) pois cada mensagem envolve chamada a LLM.
-
-## Fluxo completo — Processar Diagrama
-
-1. A mensagem `UploadDiagramaConcluidoDto` chega via SQS
-2. O Consumer instancia Handler, Gateway e Metrics
-3. O Handler verifica deduplicação: se já existe processamento em estado terminal, ignora
-4. O Handler tenta recuperar a URL do S3 caso a mensagem venha sem (cenário de retry)
-5. O Handler cria o registro inicial com constraint check para evitar concorrência
-6. O Handler instancia o UseCase e chama `ExecutarAsync`
-7. O UseCase transiciona o aggregate para `EmProcessamento`, persiste e publica evento
-8. O UseCase chama o serviço de LLM com fallback entre modelos
-9. Conforme o resultado (sucesso/rejeição/falha), o aggregate transiciona de estado e publica a mensagem correspondente
+O `IDiagramaAnaliseService` é injetado via DI do .NET no Consumer por ser mais complexo (requer configuração de múltiplos modelos, pipeline do Polly, downloader). O Handler, Gateway e Metrics são instanciados diretamente. O MassTransit é configurado com processamento sequencial (`ConcurrentMessageLimit = 1`, `PrefetchCount = 1`) pois cada mensagem envolve chamada a LLM.
 
 ---
 Anterior: [Banco de dados - Processamento](../02%20-%20Banco%20de%20dados/1_banco_de_dados_processamento.md)  

@@ -12,7 +12,7 @@ Foi adotada uma abordagem code-first, mapeando as entidades e delegando para o E
 
 ## Diagrama de Entidade e Relacionamento
 
-![Diagrama ER Relatório](banco_relatorio.png)
+![Diagrama ER Relatório](Anexos/banco_relatorio.png)
 
 ## Estrutura
 

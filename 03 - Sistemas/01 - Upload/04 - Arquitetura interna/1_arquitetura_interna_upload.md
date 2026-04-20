@@ -4,7 +4,7 @@
 
 O serviço de Upload segue Clean Architecture com quatro projetos: Domain, Application, Infrastructure e API. A inversão de dependência é feita sem container de DI — cada camada externa instancia os componentes necessários e passa para as camadas internas, que dependem apenas de interfaces.
 
-![Estrutura da solution](estrutura_solution_upload.png)
+![Estrutura da solution](Anexos/estrutura_solution_upload.png)
 
 ## Camadas
 
@@ -218,16 +218,6 @@ public class EnviarArquivoPresenter : BasePresenter, IEnviarArquivoPresenter
     [...]
 }
 ```
-
-## Fluxo completo — Enviar Diagrama
-
-1. O endpoint `POST /api/upload/diagrama` recebe o arquivo
-2. O endpoint instancia Gateway, Presenter, Handler, Hash e Metrics
-3. O Handler recebe tudo, instancia o UseCase e o Logger, e chama `ExecutarAsync`
-4. O UseCase cria o aggregate `UploadDiagrama.Criar(...)`, gera o hash, verifica deduplicação via Gateway
-5. Se não é duplicado, valida segurança (assinatura, conteúdo, ClamAV), armazena no S3, persiste no banco e publica mensagem
-6. O UseCase popula o Presenter com o resultado (nunca retorna valores)
-7. O endpoint chama `presenter.ObterResultado()` para obter o `IActionResult`
 
 ---
 Anterior: [Banco de dados - Upload](../03%20-%20Banco%20de%20dados/1_banco_de_dados_upload.md)  

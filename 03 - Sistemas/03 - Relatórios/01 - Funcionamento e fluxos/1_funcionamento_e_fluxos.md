@@ -83,37 +83,15 @@ Se a requisição contém tipos com respostas mistas (ex: um Concluido e um Acei
 
 ## Geração de relatórios via Strategy Pattern
 
-A geração de relatórios é feita pelo `GerarRelatorioUseCase`, que resolve a strategy correta via `IRelatorioStrategyResolver` e delega a geração. A arquitetura é extensível por design: cada formato de saída é uma strategy independente.
+A geração usa Strategy Pattern — cada formato de saída é uma strategy independente, resolvida pelo `IRelatorioStrategyResolver`. Detalhes do padrão e da extensibilidade em [Arquitetura interna](../04%20-%20Arquitetura%20interna/1_arquitetura_interna_relatorio.md).
 
 ### Strategies existentes
 
-**JSON**
-
-O `RelatorioJsonStrategy` serializa os dados da análise (descrição, componentes, riscos, recomendações) em formato JSON. O conteúdo é armazenado inline no banco, no campo `Conteudos` do `RelatorioGerado`, pois o volume é pequeno.
-
-**Markdown**
-
-O `RelatorioMarkdownStrategy` gera um documento Markdown formatado com cabeçalhos e listas. O conteúdo é armazenado em dois locais: inline no banco e no S3 como arquivo `.md`, com a URL armazenada no campo `Conteudos`.
-
-**PDF**
-
-O `RelatorioPdfStrategy` gera um documento PDF usando QuestPDF. O PDF é enviado ao S3 e a URL é armazenada no campo `Conteudos`.
-
 | Strategy | Formato | Armazenamento |
 |---|---|---|
-| `RelatorioJsonStrategy` | JSON | Inline |
-| `RelatorioMarkdownStrategy` | Markdown | Inline + S3 |
+| `RelatorioJsonStrategy` | JSON | Inline no banco |
+| `RelatorioMarkdownStrategy` | Markdown | Inline no banco + S3 |
 | `RelatorioPdfStrategy` | PDF (QuestPDF) | S3 |
-
-### Extensibilidade
-
-Adicionar um novo formato de relatório envolve três passos:
-
-1. Criar uma nova classe que implemente `IRelatorioStrategy`
-2. Registrar no container de DI
-3. Adicionar o novo valor em `TipoRelatorioEnum`
-
-Não é necessário alterar o UseCase, o consumer, o aggregate nem os endpoints — o `IRelatorioStrategyResolver` descobre a strategy correta pelo `TipoRelatorioEnum`. Se o novo formato deve ser gerado automaticamente, basta adicioná-lo à constante `TiposRelatorioPadrao`.
 
 ## Ciclo de vida do aggregate
 

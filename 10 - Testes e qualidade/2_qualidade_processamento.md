@@ -10,9 +10,9 @@
 
 ## Test Coverage
 
-Veja o [relatório completo de cobertura](test_coverage_processamento_completo.zip) (download do HTML).
+Veja o [relatório completo de cobertura](Anexos/test_coverage_processamento_completo.zip) (download do HTML).
 
-![Test Coverage - Processamento](test_coverage_processamento_resumo.png)
+![Test Coverage - Processamento](Anexos/test_coverage_processamento_resumo.png)
 
 O projeto de Processamento possui 36 arquivos de teste, cobrindo testes unitários de domínio (aggregates, value objects), application (use cases, handlers), infrastructure (repositórios, armazenamento S3, messaging, monitoramento) e configurações do worker.
 

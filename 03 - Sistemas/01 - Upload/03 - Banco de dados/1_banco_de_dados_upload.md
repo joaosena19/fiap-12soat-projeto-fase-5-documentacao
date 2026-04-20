@@ -12,7 +12,7 @@ Foi adotada uma abordagem code-first, mapeando as entidades e delegando para o E
 
 ## Diagrama de Entidade e Relacionamento
 
-![Diagrama ER Upload](banco_upload.png)
+![Diagrama ER Upload](Anexos/banco_upload.png)
 
 ## Estrutura
 

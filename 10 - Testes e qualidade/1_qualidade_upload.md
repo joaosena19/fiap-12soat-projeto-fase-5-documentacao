@@ -10,9 +10,9 @@
 
 ## Test Coverage
 
-Veja o [relatório completo de cobertura](test_coverage_upload_completo.zip) (download do HTML).
+Veja o [relatório completo de cobertura](Anexos/test_coverage_upload_completo.zip) (download do HTML).
 
-![Test Coverage - Upload](test_coverage_upload_resumo.png)
+![Test Coverage - Upload](Anexos/test_coverage_upload_resumo.png)
 
 O projeto de Upload possui 38 arquivos de teste, cobrindo testes unitários (domínio, application, infrastructure) e testes de integração (controllers, middleware, health checks, autenticação).
 

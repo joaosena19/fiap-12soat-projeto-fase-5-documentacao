@@ -12,7 +12,7 @@ Foi adotada uma abordagem code-first, mapeando as entidades e delegando para o E
 
 ## Diagrama de Entidade e Relacionamento
 
-![Diagrama ER Processamento](banco_processamento.png)
+![Diagrama ER Processamento](Anexos/banco_processamento.png)
 
 ## Estrutura
 
