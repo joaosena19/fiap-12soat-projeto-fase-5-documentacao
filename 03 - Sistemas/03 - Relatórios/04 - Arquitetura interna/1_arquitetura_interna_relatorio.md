@@ -18,7 +18,7 @@ public class ResultadoDiagrama
 {
     public Guid Id { get; private set; }
     public Guid AnaliseDiagramaId { get; private set; }
-    public StatusAnalise Status { get; private set; } = null!;
+    public StatusResultadoDiagrama Status { get; private set; } = null!;
     public AnaliseResultado? AnaliseResultado { get; private set; }
     public List<RelatorioGerado> Relatorios { get; private set; } = new();
     public List<ErroResultadoDiagrama> Erros { get; private set; } = new();
@@ -27,47 +27,52 @@ public class ResultadoDiagrama
     public void RegistrarAnalise(AnaliseResultado analiseResultado)
     {
         AnaliseResultado = analiseResultado;
-        Status = new StatusAnalise(StatusAnaliseEnum.Analisado);
-        DataUltimaTentativa = new DataUltimaTentativa(DateTimeOffset.UtcNow);
+        Status = new StatusResultadoDiagrama(StatusAnaliseEnum.Analisado);
     }
 
-    public void AdicionarRelatorio(TipoRelatorioEnum tipoRelatorio, ConteudosRelatorio conteudos)
+    public void ConcluirRelatorio(TipoRelatorioEnum tipoRelatorio, ConteudosRelatorio conteudos)
     {
-        var relatorioExistente = Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipoRelatorio);
-
-        if (relatorioExistente != null)
-            relatorioExistente.ConcluirGeracao(conteudos);
-        else
-            Relatorios.Add(RelatorioGerado.Criar(tipoRelatorio, conteudos));
-
-        AtualizarStatusGeral();
+        ObterRelatorio(tipoRelatorio).Concluir(conteudos);
     }
 
-    public void RegistrarErroRelatorio(TipoRelatorioEnum tipoRelatorio, string mensagem, OrigemErroEnum origemErro)
+    public void RegistrarFalhaRelatorio(TipoRelatorioEnum tipoRelatorio, string mensagem)
     {
-        var relatorioExistente = Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipoRelatorio);
-        relatorioExistente?.MarcarComoErro();
-        Erros.Add(ErroResultadoDiagrama.Criar(tipoRelatorio, mensagem, origemErro, Erros.Count + 1));
-        [...]
+        ObterRelatorio(tipoRelatorio).RegistrarErro();
+        Erros.Add(ErroResultadoDiagrama.Criar(mensagem, tipoRelatorio, OrigemErroEnum.GeracaoRelatorio, null));
     }
+
+    public void PrepararParaReprocessamento() { [...] }
     [...]
 }
 ```
 
-A entity `RelatorioGerado` tem seu próprio ciclo de vida (Pendente → EmGeracao → Concluido/Erro), e o aggregate recalcula seu status geral com base nos estados dos filhos:
+A entity `RelatorioGerado` tem seu próprio ciclo de vida (NaoSolicitado/Automatico → Solicitado → EmProcessamento → Concluido/Erro), e o aggregate gerencia a coleção de relatórios via métodos como `ConcluirRelatorio`, `MarcarRelatorioEmProcessamento` e `RegistrarFalhaRelatorio`:
 
 ```csharp
+[AggregateMember]
 public class RelatorioGerado
 {
-    public Guid Id { get; private set; }
     public TipoRelatorio Tipo { get; private set; } = null!;
     public StatusRelatorio Status { get; private set; } = null!;
-    public Conteudos Conteudos { get; private set; } = null!;
-    [...]
+    public ConteudosRelatorio Conteudos { get; private set; } = null!;
+    public DataGeracaoRelatorio? DataGeracao { get; private set; }
 
-    public static RelatorioGerado Criar(TipoRelatorioEnum tipo, Conteudos conteudos)
+    public static RelatorioGerado Criar(TipoRelatorioEnum tipo, StatusRelatorioEnum statusInicial = StatusRelatorioEnum.NaoSolicitado)
     {
-        return new RelatorioGerado(Uuid.NewSequential(), new TipoRelatorio(tipo), new StatusRelatorio(StatusRelatorioEnum.Concluido), conteudos, new DataGeracao(DateTimeOffset.UtcNow));
+        return new RelatorioGerado
+        {
+            Tipo = new TipoRelatorio(tipo),
+            Status = new StatusRelatorio(statusInicial),
+            Conteudos = ConteudosRelatorio.Vazio(),
+            DataGeracao = null
+        };
+    }
+
+    public void Concluir(ConteudosRelatorio conteudos)
+    {
+        Conteudos = conteudos;
+        DataGeracao = new DataGeracaoRelatorio(DateTimeOffset.UtcNow);
+        Status = new StatusRelatorio(StatusRelatorioEnum.Concluido);
     }
     [...]
 }
@@ -92,12 +97,28 @@ public class GerarRelatorioUseCase
         [...]
         var resultadoDiagrama = await gateway.ObterPorAnaliseDiagramaIdAsync(analiseDiagramaId);
         [...]
-        var strategy = strategyResolver.Resolver(tipoRelatorio);
-        var conteudos = await strategy.GerarAsync(resultadoDiagrama, resultadoDiagrama.AnaliseResultado!);
+        var relatorio = resultadoDiagrama.ObterRelatorio(tipoRelatorio);
+        if (!relatorio.PodeGerar())
+            [...]
 
-        resultadoDiagrama.AdicionarRelatorio(tipoRelatorio, conteudos);
-        await gateway.SalvarAsync(resultadoDiagrama);
-        [...]
+        try
+        {
+            resultadoDiagrama.MarcarRelatorioEmProcessamento(tipoRelatorio);
+            await gateway.SalvarAsync(resultadoDiagrama);
+
+            var strategy = strategyResolver.Resolver(tipoRelatorio);
+            var conteudo = await strategy.GerarAsync(resultadoDiagrama);
+
+            resultadoDiagrama.ConcluirRelatorio(tipoRelatorio, conteudo);
+            await gateway.SalvarAsync(resultadoDiagrama);
+            [...]
+        }
+        catch (Exception ex)
+        {
+            resultadoDiagrama.RegistrarFalhaRelatorio(tipoRelatorio, ex.Message);
+            await gateway.SalvarAsync(resultadoDiagrama);
+            [...]
+        }
     }
 }
 ```
@@ -110,21 +131,24 @@ public class SolicitarGeracaoRelatoriosUseCase
     public async Task ExecutarAsync(Guid analiseDiagramaId, IReadOnlyCollection<TipoRelatorioEnum> tiposRelatorio, IResultadoDiagramaGateway gateway, IRelatorioMessagePublisher messagePublisher, ISolicitarGeracaoRelatoriosPresenter presenter, IAppLogger logger)
     {
         [...]
-        var resultados = new List<ResultadoSolicitacaoRelatorioDto>();
-
-        foreach (var tipo in tiposRelatorio)
-        {
-            var relatorioExistente = resultadoDiagrama.Relatorios.FirstOrDefault(r => r.Tipo.Valor == tipo);
-
-            if (relatorioExistente?.Status.Valor == StatusRelatorioEnum.Concluido)
-                resultados.Add(new ResultadoSolicitacaoRelatorioDto { Tipo = tipo, Resultado = ResultadoSolicitacaoGeracaoRelatorioEnum.Concluido });
-            else if (relatorioExistente?.Status.Valor == StatusRelatorioEnum.EmGeracao)
-                resultados.Add(new ResultadoSolicitacaoRelatorioDto { Tipo = tipo, Resultado = ResultadoSolicitacaoGeracaoRelatorioEnum.JaEmAndamento });
-            else
-                tiposParaGerar.Add(tipo);
-        }
+        var resultadoDiagrama = await ObterResultadoDiagramaAsync(analiseDiagramaId, gateway, presenter);
+        [...]
+        var resultadoSolicitacao = MontarResultadoSolicitacao(analiseDiagramaId, tiposRelatorio, resultadoDiagrama);
+        await PersistirEPublicarSolicitacoesAsync(analiseDiagramaId, resultadoDiagrama, resultadoSolicitacao.Relatorios, gateway, messagePublisher);
+        presenter.ApresentarSucesso(resultadoSolicitacao);
         [...]
     }
+
+    private static ItemResultadoSolicitacaoRelatorioDto CriarItemResultadoSolicitacao(TipoRelatorioEnum tipoRelatorio, ResultadoDiagrama resultadoDiagrama)
+    {
+        var resultado = resultadoDiagrama.ObterResultadoSolicitacaoGeracaoRelatorio(tipoRelatorio);
+
+        if (resultado == ResultadoSolicitacaoGeracaoRelatorioEnum.AceitoParaGeracao)
+            resultadoDiagrama.MarcarRelatorioSolicitado(tipoRelatorio);
+
+        return new ItemResultadoSolicitacaoRelatorioDto { Tipo = tipoRelatorio, Resultado = resultado };
+    }
+    [...]
 }
 ```
 
@@ -326,7 +350,7 @@ Ambos seguem o mesmo padrão de Clean Architecture.
 4. O `SolicitarGeracaoRelatoriosConsumer` recebe a mensagem e itera sobre os tipos
 5. Para cada tipo, o `GerarRelatorioUseCase` resolve a strategy adequada via `IRelatorioStrategyResolver`
 6. A strategy gera o conteúdo: JSON e Markdown são armazenados inline, PDF é enviado ao S3
-7. O aggregate `ResultadoDiagrama.AdicionarRelatorio(...)` adiciona o `RelatorioGerado` e recalcula o status geral
+7. O UseCase chama `resultadoDiagrama.ConcluirRelatorio(...)` no aggregate e persiste
 
 O usuário também pode solicitar geração manualmente via `POST /api/relatorio/{analiseDiagramaId}`, que avalia quais relatórios precisam ser (re)gerados e publica a mensagem correspondente.
 

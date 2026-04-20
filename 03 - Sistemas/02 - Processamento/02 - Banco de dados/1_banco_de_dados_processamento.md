@@ -6,7 +6,7 @@
 - **ORM**: Entity Framework Core
 - **Terraform**: [fiap-12soat-projeto-fase-5-processamento/terraform](https://github.com/joaosena19/fiap-12soat-projeto-fase-5-processamento/tree/main/terraform)
 
-O PostgreSQL foi escolhido pois os dados de processamento possuem estrutura bem definida (status, timestamps, resultado da análise) e são facilmente representáveis em colunas e JSON. A combinação PostgreSQL + Entity Framework Core funciona muito bem com .NET e já é a stack consolidada do projeto.
+O PostgreSQL foi escolhido por familiaridade minha, ser gratuito e por combinar muito bem com o Entity Framework Core no .NET, já sendo a stack consolidada do projeto.
 
 Foi adotada uma abordagem code-first, mapeando as entidades e delegando para o Entity Framework Core a criação das tabelas, definição de campos e relacionamentos.
 

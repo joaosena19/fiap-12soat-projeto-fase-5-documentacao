@@ -219,10 +219,6 @@ public class EnviarArquivoPresenter : BasePresenter, IEnviarArquivoPresenter
 }
 ```
 
-## Inversão de dependência
-
-A inversão de dependência é feita sem container de DI. Cada camada instancia os componentes necessários e fornece para as camadas inferiores. Serviços que precisam de configuração externa (S3, MassTransit, ClamAV) são registrados no `Program.cs` via DI do .NET e injetados no Controller via construtor — mas o Controller os repassa manualmente para o Handler e UseCase.
-
 ## Fluxo completo — Enviar Diagrama
 
 1. O endpoint `POST /api/upload/diagrama` recebe o arquivo

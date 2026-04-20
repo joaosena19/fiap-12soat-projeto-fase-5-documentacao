@@ -6,7 +6,7 @@
 - **ORM**: Entity Framework Core
 - **Terraform**: [fiap-12soat-projeto-fase-5-relatorio/terraform](https://github.com/joaosena19/fiap-12soat-projeto-fase-5-relatorio/tree/main/terraform)
 
-O PostgreSQL foi escolhido pois os dados de relatório combinam colunas estruturadas (status, timestamps) com payloads JSON variáveis (relatórios gerados, resultado da análise). O suporte nativo a JSONB do PostgreSQL permite consultas eficientes nessas colunas sem abrir mão da integridade relacional. A combinação PostgreSQL + Entity Framework Core funciona muito bem com .NET e já é a stack consolidada do projeto.
+O PostgreSQL foi escolhido por familiaridade minha, ser gratuito e por combinar muito bem com o Entity Framework Core no .NET, já sendo a stack consolidada do projeto.
 
 Foi adotada uma abordagem code-first, mapeando as entidades e delegando para o Entity Framework Core a criação das tabelas, definição de campos e relacionamentos.
 
@@ -66,7 +66,7 @@ Valores possíveis para `tipo`: `Json`, `Markdown`, `Pdf`
 
 Valores possíveis para `status`: `NaoSolicitado`, `Automatico`, `Solicitado`, `EmProcessamento`, `Concluido`, `Erro`
 
-O campo `conteudos` é um dicionário chave/valor onde a chave identifica o formato e o valor é o conteúdo gerado. Fica vazio (`{}`) enquanto o relatório não for concluído.
+O campo `conteudos` é um dicionário chave/valor variável, onde cada tipo de relatório pode armazenar seu conteúdo de uma ou mais formas diferentes (JSON inline, Markdown inline, URL do Markdown no S3, etc.).
 
 ### Esquema JSONB — `erros`
 

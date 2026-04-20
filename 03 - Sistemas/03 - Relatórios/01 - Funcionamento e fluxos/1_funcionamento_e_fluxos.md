@@ -2,17 +2,19 @@
 
 O serviço de Relatórios é um sistema híbrido: expõe endpoints HTTP para consulta e solicitação de relatórios, e consome mensagens dos serviços de Upload e Processamento para manter o estado atualizado e gerar relatórios automaticamente. Ele é o último elo da pipeline.
 
-O serviço de Relatórios **não chama a IA**. A análise do diagrama é feita uma única vez pelo serviço de Processamento, e o resultado é propagado via mensagem. O serviço de Relatórios apenas transforma esses dados em diferentes formatos de saída — JSON, Markdown, PDF.
+O serviço de Relatórios consome a análise do diagrama feita pelo serviço de Processamento, que ocorre uma única vez. O serviço de Relatórios apenas transforma esses dados em diferentes formatos de saída — JSON, Markdown, PDF.
 
 ## Visão geral dos fluxos
 
-O serviço possui dois fluxos de geração de relatórios e dois fluxos de consulta:
+#### Geração de relatórios
 
 ![Fluxo de geração de relatórios](Anexos/fluxo_relatorio_geracao_relatorios.svg)
 
+#### Acompanhamento de status
+
 ![Fluxo de consulta de status e JSON](Anexos/fluxo_relatorio_status_e_json.svg)
 
-## Pontos de entrada assíncronos (consumers)
+## Pontos de entrada (consumers)
 
 O serviço consome seis tipos de mensagem, cada uma atualizando o aggregate `ResultadoDiagrama` conforme o progresso na pipeline:
 
@@ -51,7 +53,7 @@ public static readonly IReadOnlyCollection<TipoRelatorioEnum> Tipos = [
 ];
 ```
 
-Optei por manter apenas JSON como automático, pois é o formato mais leve e rápido. Markdown e PDF ficam disponíveis sob demanda via `POST /api/relatorio/{id}`, pois envolvem upload ao S3 (Markdown) ou renderização de documento (PDF).
+Optei por manter apenas JSON como automático Markdown e PDF ficam disponíveis sob demanda via `POST /api/relatorio/{id}`, pois envolvem upload ao S3.
 
 ### Criação e idempotência
 
@@ -61,15 +63,15 @@ O aggregate `ResultadoDiagrama` pode ser criado por três consumers diferentes (
 
 O serviço expõe três endpoints REST:
 
-### GET /api/relatorio
+### GET `/api/relatorio`
 
 Lista todos os resultados de diagramas com status consolidado. Para cada resultado, retorna o `AnaliseDiagramaId`, o status geral, quais relatórios estão disponíveis, quantidade de erros e datas.
 
-### GET /api/relatorio/{analiseDiagramaId}
+### GET `/api/relatorio/{analiseDiagramaId}`
 
 Busca um resultado específico com todos os detalhes: status do aggregate, lista de relatórios gerados (com tipo, status, conteúdo e data), e histórico de erros. Retorna 404 se o `AnaliseDiagramaId` não existir.
 
-### POST /api/relatorio/{analiseDiagramaId}
+### POST `/api/relatorio/{analiseDiagramaId}`
 
 Solicita a geração (ou re-geração) de relatórios. O corpo da requisição contém a lista de `TiposRelatorio` desejados (JSON, Markdown, PDF). O UseCase avalia cada tipo individualmente:
 
@@ -91,15 +93,15 @@ O `RelatorioJsonStrategy` serializa os dados da análise (descrição, component
 
 **Markdown**
 
-O `RelatorioMarkdownStrategy` gera um documento Markdown formatado com cabeçalhos e listas. O conteúdo é armazenado em dois locais: inline no banco (para consulta rápida) e no S3 como arquivo `.md` (para download).
+O `RelatorioMarkdownStrategy` gera um documento Markdown formatado com cabeçalhos e listas. O conteúdo é armazenado em dois locais: inline no banco e no S3 como arquivo `.md`, com a URL armazenada no campo `Conteudos`.
 
 **PDF**
 
-O `RelatorioPdfStrategy` gera um documento PDF usando QuestPDF. O PDF é enviado ao S3 e a URL é armazenada no campo `Conteudos`. Não há conteúdo inline pois PDFs são binários.
+O `RelatorioPdfStrategy` gera um documento PDF usando QuestPDF. O PDF é enviado ao S3 e a URL é armazenada no campo `Conteudos`.
 
 | Strategy | Formato | Armazenamento |
 |---|---|---|
-| `RelatorioJsonStrategy` | JSON | Inline no banco |
+| `RelatorioJsonStrategy` | JSON | Inline |
 | `RelatorioMarkdownStrategy` | Markdown | Inline + S3 |
 | `RelatorioPdfStrategy` | PDF (QuestPDF) | S3 |
 
@@ -134,11 +136,9 @@ O aggregate `ResultadoDiagrama` gerencia duas dimensões de estado:
 | `NaoSolicitado` | Relatório não foi solicitado |
 | `Automatico` | Solicitado automaticamente após análise |
 | `Solicitado` | Solicitado via HTTP |
-| `EmGeracao` | Geração em andamento |
+| `EmProcessamento` | Geração em andamento |
 | `Concluido` | Relatório gerado com sucesso |
 | `Erro` | Falha na geração (permite retry) |
-
-O aggregate recalcula seu status geral com base nos estados dos relatórios filhos. Quando todos estão concluídos, o aggregate é considerado completo.
 
 ## Fluxo completo — da análise ao relatório
 
@@ -146,9 +146,9 @@ O aggregate recalcula seu status geral com base nos estados dos relatórios filh
 2. O consumer registra o `AnaliseResultado` no aggregate e transiciona para `Analisado`
 3. O consumer publica `SolicitarGeracaoRelatorios` com os tipos padrão (JSON)
 4. O `SolicitarGeracaoRelatoriosConsumer` recebe a mensagem e itera sobre os tipos
-5. Para cada tipo, o `GerarRelatorioUseCase` resolve a strategy, marca o relatório como `EmGeracao` e executa
+5. Para cada tipo, o `GerarRelatorioUseCase` resolve a strategy, marca o relatório como `EmProcessamento` e executa
 6. A strategy gera o conteúdo no formato apropriado e retorna os `Conteudos`
-7. O aggregate registra o `RelatorioGerado` com status `Concluido` e os conteúdos
+7. O UseCase chama `ConcluirRelatorio(...)` no aggregate, que registra conteúdos e marca `Concluido`
 8. Se a strategy falhar, o relatório é marcado como `Erro` e um `ErroResultadoDiagrama` é adicionado ao histórico
 9. O usuário pode solicitar geração de Markdown e PDF via `POST /api/relatorio/{id}`, que segue o mesmo fluxo
 

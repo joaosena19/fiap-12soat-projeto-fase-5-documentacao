@@ -11,9 +11,9 @@ O serviço de Upload é a porta de entrada do sistema. Ele recebe imagens de dia
 O serviço expõe dois endpoints principais:
 
 - `POST /api/upload/diagrama` — recebe o arquivo de diagrama e inicia o fluxo de upload
-- `GET /api/upload/diagramas` — lista todos os uploads realizados, ordenados por data de criação (mais recentes primeiro)
+- `GET /api/upload/diagramas` — lista todos os uploads realizados, ordenados por data de criação
 
-Há também o `POST /api/autenticacao/token` para geração de token JWT, pois todos os endpoints requerem autenticação.
+Há também o `POST /api/autenticacao/token` para geração de token JWT, usado pelo próprio serviço de Upload e pelo serviço de Relatório para autenticação.
 
 ## Fluxo de envio de diagrama
 
@@ -33,7 +33,7 @@ Se qualquer validação falhar, o upload é rejeitado antes mesmo de gerar o has
 
 O conteúdo do arquivo passa por SHA-256 para gerar um hash único. Esse hash é consultado no banco de dados para verificar se já existe um upload aceito com o mesmo conteúdo.
 
-Se já existir, o serviço **reutiliza** o registro existente: republica a mensagem para o serviço de Processamento e retorna o upload existente com status HTTP 200.
+Se já existir, o serviço **reutiliza** o registro existente: caso já tenha concluído o processamento, o retorna, caso tenha falhado republica a mensagem para o serviço de Processamento.
 
 ### 3. Validação de segurança em três estágios
 
@@ -47,7 +47,7 @@ Se qualquer estágio falhar, o upload é marcado como rejeitado, os erros são r
 
 ### 4. Armazenamento no S3
 
-Arquivos que passaram nas validações são enviados ao Amazon S3. O serviço gera um nome físico aleatório (UUID + extensão) e armazena sob o prefixo `diagramas/`. O nome original não é usado como chave no S3.
+Arquivos que passaram nas validações são enviados ao AWS S3. O serviço gera um nome físico aleatório (UUID + extensão) e armazena sob o prefixo `diagramas/`. O nome original não é usado como chave no S3.
 
 O aggregate é então marcado como aceito (`FoiAceito = true`) e recebe os `DetalhesArmazenamento` com o nome físico e a URL do S3.
 

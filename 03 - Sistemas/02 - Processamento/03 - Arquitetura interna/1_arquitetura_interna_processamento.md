@@ -10,7 +10,7 @@ O serviço de Processamento segue Clean Architecture com quatro projetos: Domain
 
 ### Domain (Entities / Enterprise Business Rules)
 
-O aggregate root `ProcessamentoDiagrama` implementa uma máquina de estados que governa todo o ciclo de vida do processamento. Os estados são: `Pendente`, `EmProcessamento`, `Concluido`, `Rejeitado` e `Erro`.
+O aggregate root `ProcessamentoDiagrama` implementa uma máquina de estados que governa todo o ciclo de vida do processamento. Os estados são: `AguardandoProcessamento`, `EmProcessamento`, `Concluido`, `Rejeitado` e `Falha`.
 
 ```csharp
 [AggregateRoot]
@@ -19,42 +19,51 @@ public class ProcessamentoDiagrama
     public Guid Id { get; private set; }
     public Guid AnaliseDiagramaId { get; private set; }
     public StatusProcessamento StatusProcessamento { get; private set; } = null!;
-    public DadosOrigem? DadosOrigem { get; private set; }
+    public TentativasProcessamento TentativasProcessamento { get; private set; } = null!;
     public AnaliseResultado? AnaliseResultado { get; private set; }
-    public TentativasRealizadas TentativasRealizadas { get; private set; } = null!;
+    public DadosOrigem? DadosOrigem { get; private set; }
+    public HistoricoTemporal HistoricoTemporal { get; private set; } = null!;
     [...]
 
     public static ProcessamentoDiagrama Criar(Guid analiseDiagramaId)
     {
+        if (analiseDiagramaId == Guid.Empty)
+            throw new DomainException("AnaliseDiagramaId não pode ser vazio");
+
         return new ProcessamentoDiagrama(
             Uuid.NewSequential(),
             analiseDiagramaId,
-            new StatusProcessamento(StatusProcessamentoEnum.Pendente),
-            null,
-            null,
-            new TentativasRealizadas(0),
-            new DataCriacao(DateTimeOffset.UtcNow),
-            new DataAtualizacao(DateTimeOffset.UtcNow));
+            new StatusProcessamento(StatusProcessamentoEnum.AguardandoProcessamento),
+            new TentativasProcessamento(0),
+            HistoricoTemporal.Criar(),
+            null);
     }
 
     public void IniciarProcessamento()
     {
-        StatusProcessamento = StatusProcessamento.TransicionarPara(StatusProcessamentoEnum.EmProcessamento);
-        DataAtualizacao = new DataAtualizacao(DateTimeOffset.UtcNow);
+        if (StatusProcessamento.Valor != StatusProcessamentoEnum.AguardandoProcessamento && StatusProcessamento.Valor != StatusProcessamentoEnum.Falha)
+            throw new DomainException("Só é possível iniciar processamento quando o status é AguardandoProcessamento ou Falha");
+
+        StatusProcessamento = new StatusProcessamento(StatusProcessamentoEnum.EmProcessamento);
+        HistoricoTemporal = HistoricoTemporal.MarcarInicioProcessamento();
     }
 
-    public void ConcluirProcessamento(string descricaoAnalise, IReadOnlyCollection<string>? componentesIdentificados, IReadOnlyCollection<string>? riscosArquiteturais, IReadOnlyCollection<string>? recomendacoesBasicas, int tentativasRealizadas)
+    public void ConcluirProcessamento(string descricaoAnalise, List<string> componentesIdentificados, List<string> riscosArquiteturais, List<string> recomendacoesBasicas, int tentativasRealizadas)
     {
-        StatusProcessamento = StatusProcessamento.TransicionarPara(StatusProcessamentoEnum.Concluido);
-        AnaliseResultado = AnaliseResultado.Criar(descricaoAnalise, componentesIdentificados, riscosArquiteturais, recomendacoesBasicas);
-        TentativasRealizadas = new TentativasRealizadas(tentativasRealizadas);
         [...]
+        AnaliseResultado = AnaliseResultado.Criar(descricaoAnalise, componentesIdentificados, riscosArquiteturais, recomendacoesBasicas);
+        TentativasProcessamento = new TentativasProcessamento(tentativasRealizadas);
+        StatusProcessamento = new StatusProcessamento(StatusProcessamentoEnum.Concluido);
+        HistoricoTemporal = HistoricoTemporal.MarcarConclusaoProcessamento();
     }
-    [...]
+
+    public void RegistrarFalha(int tentativasRealizadas) { [...] }
+    public void RegistrarRejeicao(int tentativasRealizadas) { [...] }
+    public void RegistrarDadosOrigem(string localizacaoUrl, string nomeFisico, string nomeOriginal, string extensao) { [...] }
 }
 ```
 
-O value object `StatusProcessamento` encapsula as regras de transição de estado. Transições inválidas (como de `Concluido` para `Pendente`) lançam `DomainException`. A entidade `DadosOrigem` guarda referência ao arquivo no S3, e `AnaliseResultado` armazena a saída da LLM.
+O value object `StatusProcessamento` valida que o valor informado pertence ao enum `StatusProcessamentoEnum`. As regras de transição vivem nos métodos do aggregate (`IniciarProcessamento`, `ConcluirProcessamento`, `RegistrarFalha`, `RegistrarRejeicao`), que validam o estado atual antes de transicionar. A entidade `DadosOrigem` guarda referência ao arquivo no S3, e `AnaliseResultado` armazena a saída da LLM.
 
 ### Application (Use Cases / Application Business Rules)
 
@@ -92,7 +101,8 @@ Application/
 │   ├── Gateways/
 │   │   └── IProcessamentoDiagramaGateway.cs
 │   ├── LLM/
-│   │   └── IDiagramaAnaliseService.cs
+│   │   ├── IDiagramaAnaliseService.cs
+│   │   └── ResultadoAnaliseDto.cs
 │   ├── Messaging/
 │   │   └── IProcessamentoDiagramaMessagePublisher.cs
 │   └── Monitoramento/
@@ -101,8 +111,7 @@ Application/
 │       └── IMetricsService.cs
 ├── ProcessamentoDiagrama/
 │   ├── Dtos/
-│   │   ├── ProcessarDiagramaDto.cs
-│   │   └── ResultadoAnaliseDto.cs
+│   │   └── ProcessarDiagramaDto.cs
 │   └── UseCases/
 │       └── ProcessarDiagramaUseCase.cs
 ```
@@ -146,25 +155,71 @@ O `DiagramaAnaliseService` é a implementação de `IDiagramaAnaliseService` e c
 ```csharp
 public class DiagramaAnaliseService : IDiagramaAnaliseService
 {
+    private readonly LlmOptions _opcoes;
+    private readonly ILlmClientFactory _clientFactory;
+    private readonly IArquivoDiagramaDownloader _arquivoDiagramaDownloader;
+    private readonly IAppLogger _logger;
+    private readonly ResiliencePipeline<ResultadoAnaliseDto> _pipeline;
     [...]
+
     public async Task<ResultadoAnaliseDto> AnalisarDiagramaAsync(Guid analiseDiagramaId, string nomeFisico, string localizacaoUrl, string extensao)
     {
-        var imagemBase64 = await _downloader.BaixarImagemComoBase64Async(localizacaoUrl);
-        var prompt = MontarPromptAnalise(extensao);
-        var tentativas = 0;
-
-        foreach (var modeloConfig in _modelos)
+        var cronometro = Stopwatch.StartNew();
+        [...]
+        byte[] conteudoArquivo;
+        try
         {
-            tentativas++;
+            conteudoArquivo = await BaixarConteudoArquivoAsync(localizacaoUrl);
+        }
+        catch (Exception ex)
+        {
             [...]
-            var resultado = await _pipeline.ExecuteAsync(async cancellationToken =>
+            return CriarResultadoFalha(ex, 0, OrigemErroConstantes.Armazenamento);
+        }
+
+        var resultado = await TentarAnalisarComFallbackAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao);
+        [...]
+        return resultado;
+    }
+
+    private async Task<ResultadoAnaliseDto> TentarAnalisarComFallbackAsync(Guid analiseDiagramaId, string nomeFisico, byte[] conteudoArquivo, string extensao)
+    {
+        var modelos = _opcoes.Modelos;
+        var tentativasTotal = 0;
+
+        for (var i = 0; i < modelos.Count; i++)
+        {
+            var modelo = modelos[i];
+            var client = _clientFactory.CriarPara(modelo);
+            [...]
+            try
             {
-                return await ChamarLlmAsync(modeloConfig, prompt, imagemBase64, extensao, cancellationToken);
-            }, cancellationToken);
-            [...]
+                var resultado = await ExecutarAnaliseComResilienciaAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao, client, tentativas => tentativasModelo = tentativas);
+                tentativasTotal += tentativasModelo;
+                return resultado with { TentativasRealizadas = tentativasTotal };
+            }
+            catch (LlmIndisponivelException ex) { [...] }
+            catch (LlmPermanentException ex) { [...] }
+            catch (LlmTransientException ex) { [...] }
         }
         [...]
     }
+
+    private async Task<ResultadoAnaliseDto> ExecutarAnaliseComResilienciaAsync(Guid analiseDiagramaId, string nomeFisico, byte[] conteudoArquivo, string extensao, IDiagramaAnaliseClient client, Action<int> atualizarTentativas)
+    {
+        var tentativasRealizadas = 0;
+
+        var resultado = await _pipeline.ExecuteAsync(async cancellationToken =>
+        {
+            tentativasRealizadas++;
+            atualizarTentativas(tentativasRealizadas);
+            [...]
+            return await client.AnalisarDiagramaAsync(analiseDiagramaId, nomeFisico, conteudoArquivo, extensao);
+        }, CancellationToken.None);
+
+        return resultado with { TentativasRealizadas = tentativasRealizadas };
+    }
+    [...]
 }
 ```
 
