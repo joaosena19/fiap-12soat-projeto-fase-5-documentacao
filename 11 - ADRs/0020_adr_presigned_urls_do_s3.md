@@ -6,7 +6,7 @@ Aceito
 
 ## Contexto
 
-Relatórios em Markdown e PDF são armazenados no S3 (ver [ADR 0007](0007_adr_s3_como_armazenamento.md)). Era necessário decidir como o usuário acessa esses arquivos sem expor o bucket publicamente.
+Relatórios em Markdown e PDF são armazenados no S3 (Veja [ADR 0007 - S3 como Armazenamento de Arquivos](0007_adr_s3_como_armazenamento.md)). Era necessário decidir como o usuário acessa esses arquivos sem expor o bucket publicamente.
 
 ## Discussão e possibilidades
 

@@ -10,9 +10,9 @@ O sistema precisa autenticar chamadas à API. Era necessário decidir onde emiti
 
 ## Discussão e possibilidades
 
-O Upload é o único serviço com endpoints HTTP públicos para o usuário final. A autenticação é simples: um `clientId` gera um JWT com HS256, que expira em 1h. O Processamento é um Worker sem API (ver [ADR 0013](0013_adr_processamento_como_worker.md)), e o Relatório valida o mesmo token emitido pelo Upload.
-
 Considerei criar um serviço de autenticação dedicado (Lambda, microsserviço de identidade). Contudo, isso seria desproporcional — adicionaria um componente inteiro para uma funcionalidade trivial. O `TokenService.cs` no Upload tem poucas linhas e resolve o problema.
+
+O Upload em específico foi o serviço selecionado pois ele é a porta de entrada do sistema, o primeiro contato é através do envio do diagrama.
 
 O endpoint `POST /api/auth/token` recebe o `clientId` e retorna o JWT com claims `sub`, `client_id`, `jti` e `iat`.
 

@@ -28,12 +28,12 @@ Veja mais em [Funcionamento e fluxos - Relatório](../03%20-%20Sistemas/03%20-%2
 
 **Positivas:**
 
-* Ponto único de consulta — o cliente não precisa consultar múltiplos serviços.
+* Única fonte da verdade, cliente não precisa consultar múltiplos serviços.
 * Estado consolidado reflete toda a pipeline num único aggregate.
 
 **Negativas:**
 
-* O Relatório depende de receber todos os eventos corretamente. Se uma mensagem for perdida, o estado ficará desatualizado.
+* O Relatório é um ponto único de falha. Se uma mensagem for perdida, o estado ficará desatualizado.
 
 ---
 Anterior: [ADR 0013 - Processamento como Worker](0013_adr_processamento_como_worker.md)  

@@ -6,13 +6,13 @@ Aceito
 
 ## Contexto
 
-Era necessário decidir como os microsserviços .NET interagem com o SNS/SQS (ver [ADR 0009](0009_adr_sns_sqs_para_mensageria.md)). A alternativa era usar o AWS SDK diretamente ou uma biblioteca de abstração.
+Era necessário decidir como os microsserviços .NET interagem com o SNS/SQS (Veja [ADR 0009 - SNS + SQS para Mensageria](0009_adr_sns_sqs_para_mensageria.md)). A alternativa era usar o AWS SDK diretamente ou uma biblioteca de abstração.
 
 ## Discussão e possibilidades
 
 O MassTransit abstrai o broker de mensageria: consumers, publish, retry, serialização e controle de concorrência — tudo via interfaces .NET. Trocar de SQS para RabbitMQ ou Kafka exigiria apenas mudar a configuração de transporte, sem alterar os consumers.
 
-A alternativa seria usar o AWS SDK diretamente. Isso daria mais controle sobre a interação com o SQS, mas geraria muito boilerplate: serialização/deserialização manual, polling, tratamento de retry, dead-letter queue. O MassTransit resolve tudo isso de forma declarativa.
+A alternativa seria usar o AWS SDK diretamente. Isso daria mais controle sobre a interação com o SQS, mas sem real benefício para nosso caso de uso, além de gerar muito boilerplate e vendor lock-in. O MassTransit resolve tudo isso de forma declarativa.
 
 No projeto, os consumers são tipados (`UploadDiagramaConcluidoConsumer`, etc.) e a configuração de `ConcurrentMessageLimit` e `PrefetchCount` é feita via MassTransit, o que permite controle fino da concorrência por consumer.
 
@@ -30,8 +30,7 @@ Foi decidido utilizar o MassTransit como abstração de mensageria nos três mic
 
 **Negativas:**
 
-* Mais uma dependência no projeto.
-* Curva de aprendizado para quem não conhece o MassTransit.
+* Nenhuma.
 
 ---
 Anterior: [ADR 0009 - SNS + SQS para Mensageria](0009_adr_sns_sqs_para_mensageria.md)  

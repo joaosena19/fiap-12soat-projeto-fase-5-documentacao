@@ -10,7 +10,7 @@ Se o processamento de um diagrama falhar (LLM indisponível, erro transitório),
 
 ## Discussão e possibilidades
 
-Não existe endpoint de "retry" — o usuário simplesmente envia o arquivo novamente. O hash SHA-256 (ver [ADR 0015](0015_adr_verificacao_duplicatas_via_hash.md)) detecta que é o mesmo arquivo e o sistema decide o que fazer com base no estado atual:
+Não existe endpoint de "retry" — o usuário simplesmente envia o arquivo novamente. O hash SHA-256 (Veja [ADR 0015 - Verificação de Duplicatas via Hash SHA-256](0015_adr_verificacao_duplicatas_via_hash.md)) detecta que é o mesmo arquivo e o sistema decide o que fazer com base no estado atual:
 
 - **Se o processamento anterior já concluiu com sucesso:** o sistema retorna HTTP 200 com o resultado existente, sem guardar upload extra e sem consumir LLM.
 - **Se o processamento anterior falhou:** o sistema republica a mensagem para o Processamento, que aceita reprocessamento quando o status é `Falha`.

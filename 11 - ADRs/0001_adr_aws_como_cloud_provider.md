@@ -36,7 +36,7 @@ Os serviços utilizados são:
 
 **Negativas:**
 
-* Vendor lock-in — trocar de cloud provider exigiria reconfigurar toda a infraestrutura Terraform e adaptar os serviços específicos (SQS, SNS, S3).
+* Vendor lock-in — principalmente com serviços específicos como SNS/SQS - mas mitigado pelo uso do Terraform.
 
 ---
 Anterior: [Qualidade - Infraestrutura](../10%20-%20Testes%20e%20qualidade/4_qualidade_infra.md)  

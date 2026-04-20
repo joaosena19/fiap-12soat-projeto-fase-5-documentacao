@@ -10,11 +10,9 @@ Era necessário escolher a linguagem e o framework para os três microsserviços
 
 ## Discussão e possibilidades
 
-Tenho familiaridade com .NET e já era a stack das fases anteriores do projeto. O ecossistema é maduro para os três perfis de serviço que o projeto precisa: APIs REST (Upload e Relatório), Workers (Processamento) e Entity Framework Core para acesso a dados.
+Tenho familiaridade com .NET e já era a stack das fases anteriores do projeto. O ecossistema é maduro para os três perfis de serviço que o projeto precisa: APIs REST (Upload e Relatório), Workers (Processamento) e ORM code first para acesso a dados (EF Core).
 
-Para o serviço de Processamento, considerei brevemente outras linguagens como Python, que é mais comum em projetos de IA. Contudo, o processamento da IA é delegado para um serviço externo (Google Gemini API), logo a linguagem do host não é relevante — o serviço apenas monta a requisição HTTP e interpreta a resposta.
-
-Alternativas como Java/Spring, Node.js e Go não ofereciam vantagem que justificasse a troca. A produtividade com .NET é alta e não havia motivo para mudar.
+Para o serviço de Processamento, considerei outras linguagens como Python, que é mais comum em projetos de IA. Contudo, o processamento da IA é delegado para um serviço externo (Google Gemini), logo a linguagem do host não é relevante.
 
 ## Decisão
 

@@ -10,11 +10,11 @@ Arquivos enviados por usuários precisam ser escaneados contra malware antes de 
 
 ## Discussão e possibilidades
 
-Optei pelo ClamAV, que é um antivírus open-source, leve e gratuito. Ele roda como um Deployment + Service (ClusterIP) no Kubernetes, escutando na porta 3310 via protocolo TCP clamd. A comunicação é feita pela biblioteca nClam no .NET.
+Optei pelo ClamAV, que é um antivírus open-source, leve e gratuito. Ele roda como um Deployment + Service (ClusterIP) no Kubernetes. A comunicação é feita pela biblioteca nClam no .NET.
 
 O scan é fail-closed: se o ClamAV estiver indisponível, o upload é rejeitado. Preferi essa abordagem pois aceitar um arquivo sem scan seria um risco de segurança.
 
-Considerei como alternativa utilizar um serviço externo da AWS (ex: Amazon GuardDuty ou terceiros). Contudo, o custo seria desnecessário — o ClamAV resolve o problema sem custos adicionais e roda dentro do próprio cluster.
+Considerei como alternativa utilizar um serviço externo da AWS como Amazon GuardDuty. Contudo, o custo seria desnecessário — o ClamAV resolve o problema sem custos adicionais e roda dentro do próprio cluster.
 
 O deploy usa a imagem `clamav/clamav:stable` com limits de 500m CPU e 1Gi de memória, exposto internamente via ClusterIP.
 

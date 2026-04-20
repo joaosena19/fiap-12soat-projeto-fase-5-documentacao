@@ -16,7 +16,7 @@ Foram consideradas três abordagens:
 2. **Tudo descentralizado:** máxima independência, mas duplicação de configurações de rede e cluster.
 3. **Abordagem híbrida:** repositório central para infraestrutura compartilhada e banco provisionado em cada repo.
 
-A abordagem híbrida foi a escolha natural. O cluster EKS, VPC e subnets são compartilhados — não faz sentido duplicá-los. O banco de dados é o recurso que deve ficar isolado, pois cada serviço tem schema e configuração independentes (ver [ADR 0004](0004_adr_banco_de_dados_por_servico.md)).
+A abordagem híbrida foi a escolha natural. O cluster EKS, VPC e subnets são compartilhados — não faz sentido duplicá-los. O banco de dados é o recurso que deve ficar isolado, pois cada serviço tem schema e configuração independentes (Veja [ADR 0004 - Banco de Dados por Serviço](0004_adr_banco_de_dados_por_servico.md)).
 
 Na prática, a organização ficou:
 
@@ -41,7 +41,7 @@ Foi decidido manter um repositório de infraestrutura geral (`fiap-12soat-projet
 
 **Negativas:**
 
-* Mudanças em rede ou permissões impactam todos os serviços simultaneamente.
+* Nenhuma.
 
 ---
 Anterior: [ADR 0007 - S3 como Armazenamento de Arquivos](0007_adr_s3_como_armazenamento.md)  

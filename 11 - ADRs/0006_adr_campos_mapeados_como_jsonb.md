@@ -12,7 +12,7 @@ Os dados de análise de IA (componentes identificados, riscos arquiteturais, rec
 
 A alternativa clássica seria criar tabelas filhas com FK para cada tipo de dado (uma tabela `componentes_identificados`, outra `riscos_arquiteturais`, etc.). Contudo, esses dados nunca são consultados individualmente — sempre são lidos e escritos junto com o aggregate. Criar tabelas filhas adicionaria complexidade sem benefício, pois não há consultas do tipo "busque todos os riscos de todos os diagramas".
 
-O JSONB do PostgreSQL (ver [ADR 0005](0005_adr_escolha_do_postgresql.md)) permite armazenar listas e objetos complexos diretamente na coluna, evitando a explosão de tabelas. Se no futuro for necessário consultar esses dados individualmente, o PostgreSQL permite indexação e consultas em JSONB.
+O JSONB do PostgreSQL (Veja [ADR 0005 - Escolha do PostgreSQL](0005_adr_escolha_do_postgresql.md)) permite armazenar listas e objetos complexos diretamente na coluna, evitando a explosão de tabelas. Se no futuro for necessário consultar esses dados individualmente, o PostgreSQL permite indexação e consultas em JSONB.
 
 No Relatório, os campos `relatorios`, `erros` e `analise_resultado` são mapeados como JSONB explícito via `ResultadoDiagramaConfiguration.cs`. No Processamento, as listas `componentes_identificados`, `riscos_arquiteturais` e `recomendacoes_basicas` são serializadas via `JsonSerializer` em `HasConversion` na configuração do EF Core.
 

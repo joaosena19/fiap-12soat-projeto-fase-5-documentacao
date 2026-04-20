@@ -22,8 +22,6 @@ Todos os repositórios de aplicação (.NET) seguem a mesma estrutura:
 4. **Validação de cobertura mínima de 80%**
 5. **CI Gate** como job final
 
-A fase 5 não utiliza SonarCloud nas pipelines. A análise de qualidade é feita localmente e pela validação de cobertura mínima na CI.
-
 ### CI Gate
 
 O `ci-gate` é um job que agrega todos os resultados anteriores. A proteção de branch exige que o `ci-gate` passe antes de permitir o merge do PR.

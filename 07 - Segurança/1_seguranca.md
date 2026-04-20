@@ -55,18 +55,18 @@ O deployment do ClamAV possui liveness e readiness probes na porta 3310, com `in
 
 ## Hash SHA-256 e deduplicação
 
-Antes de qualquer validação de segurança, o `GeradorHashSha256` calcula o hash SHA-256 do conteúdo do arquivo. O hash é armazenado no aggregate `UploadDiagrama` e persistido no banco de dados.
+Antes de qualquer validação de segurança na infraestrutura, o `GeradorHashSha256` calcula o hash SHA-256 do conteúdo do arquivo. O hash é armazenado no aggregate `UploadDiagrama` e persistido no banco de dados.
 
 Quando um novo upload chega, o use case consulta o banco pelo hash. Se já existe um registro com o mesmo hash:
 
-- **Se o upload anterior foi aceito**: retorna os dados existentes e republica a mensagem de processamento. Nenhuma revalidação de segurança é necessária.
+- **Se o upload anterior foi aceito**: retorna os dados existentes e, caso não tenha sido processado, republica a mensagem de processamento. Nenhuma revalidação de segurança é necessária.
 - **Se o upload anterior foi rejeitado**: retorna os dados existentes informando que o arquivo já foi rejeitado. Não permite reenvio do mesmo arquivo malicioso.
 
-## Comunicação entre serviços
+## Segurança na comunicação entre serviços
 
 ### Mensageria (SQS/SNS)
 
-A comunicação entre os três serviços (Upload → Processamento → Relatório) é feita via MassTransit com Amazon SQS/SNS. As credenciais AWS são injetadas via Kubernetes Secrets no deploy, e o acesso aos tópicos e filas é controlado por IAM roles associadas aos pods via IRSA (IAM Roles for Service Accounts).
+A comunicação entre os três serviços (Upload → Processamento → Relatório) é feita via MassTransit com AWS SQS/SNS. As credenciais AWS são injetadas via Kubernetes Secrets no deploy, e o acesso aos tópicos e filas é controlado por IAM roles associadas aos pods via IRSA (IAM Roles for Service Accounts).
 
 Os serviços não se comunicam diretamente por HTTP entre si — o único canal inter-serviço é a mensageria.
 
@@ -85,17 +85,8 @@ Todas as requisições e mensagens carregam um `CorrelationId` (UUID) que permit
 ### Chave JWT simétrica compartilhada
 A chave de assinatura JWT é simétrica (HMAC-SHA256). Qualquer serviço que possua a chave pode gerar tokens válidos. Se a chave for comprometida, um atacante pode forjar tokens. O uso de chaves assimétricas (RS256) seria mais seguro, porém mais complexo de gerenciar neste cenário.
 
-### Endpoints de Upload sem autenticação
-Os endpoints `POST /api/upload/diagrama` e `GET /api/upload/diagramas` não exigem autenticação. Um atacante pode enviar arquivos sem se autenticar. A proteção fica nas camadas de validação de segurança (tamanho, formato, assinatura, conteúdo, malware) e na deduplicação por hash. Um rate limiter ajudaria a mitigar ataques de volumetria, mas não foi implementado.
-
 ### ClamAV como ponto único de falha
 Se o pod do ClamAV ficar indisponível, nenhum upload é processado (Fail Closed). O deployment usa uma única réplica. Em cenários de alta disponibilidade, seria necessário mais réplicas ou um serviço de scan externo.
-
-### Definições de vírus
-O ClamAV baixa as definições de vírus na inicialização do pod, usando `emptyDir` como volume. Se o pod reiniciar, as definições são baixadas novamente. Não há persistência das definições entre restarts, o que pode causar uma janela de indisponibilidade durante o download.
-
-### Comunicação interna sem TLS
-A comunicação entre o pod de Upload e o ClamAV (`clamav-service:3310`) acontece sem TLS, pois ambos estão no mesmo cluster Kubernetes e o protocolo clamd não suporta TLS nativamente. Se o cluster for compartilhado com outros tenants, isso pode ser um risco.
 
 ### Sem WAF ou rate limiting
 Não há Web Application Firewall (WAF) nem rate limiting na frente das APIs. A mitigação de DDoS e ataques de volumetria depende inteiramente da infraestrutura AWS (ELB, security groups).

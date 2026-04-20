@@ -17,7 +17,7 @@ No Processamento, a situação é diferente. O usuário não está interagindo �
 Considerei três níveis:
 
 1. **Information:** errado, pois no Processamento não é erro do usuário. Logaria um bug como informação normal.
-2. **Warning:** errado, pois `Warning` é para degradações onde a aplicação conseguiu se recuperar sozinha. Uma `DomainException` no Processamento é uma falha que precisa de atenção.
+2. **Warning:** errado, pois `Warning` é para degradações onde a aplicação conseguiu se recuperar sozinha. Uma `DomainException` no Processamento é uma falha que para o processamento.
 3. **Error:** correto, pois requer atenção do desenvolvedor.
 
 O `ProcessarDiagramaUseCase.cs` captura `DomainException` no catch block e loga como `LogError`.

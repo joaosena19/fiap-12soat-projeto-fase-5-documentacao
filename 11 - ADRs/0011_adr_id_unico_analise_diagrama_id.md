@@ -12,9 +12,7 @@ Cada diagrama percorre três serviços: Upload → Processamento → Relatório.
 
 Optei por gerar um único GUID (`AnaliseDiagramaId`) no Upload e propagá-lo por todo o sistema. Cada serviço usa esse ID como chave de correlação, com unique constraint no banco. Dado um `AnaliseDiagramaId`, é possível consultar o estado do diagrama em qualquer serviço.
 
-A alternativa seria cada serviço gerar seu próprio ID e manter um mapeamento via lookup (ex: Processamento busca "qual é o meu ID local para este AnaliseDiagramaId do Upload?"). Isso adicionaria complexidade sem benefício — o ID único resolve o problema de forma mais simples e direta.
-
-O `AnaliseDiagramaId` é gerado como `Guid.NewGuid()` no factory method `UploadDiagrama.Criar()` e propagado em todas as mensagens SNS/SQS. Todos os três bancos têm unique index nesse campo.
+A alternativa seria cada serviço gerar seu próprio ID e manter um mapeamento via lookup (ex: Processamento busca "qual é o meu ProcessamentoId local para este UploadId do Upload?"). Isso adicionaria complexidade sem benefício — o ID único resolve o problema de forma mais simples e direta.
 
 ## Decisão
 

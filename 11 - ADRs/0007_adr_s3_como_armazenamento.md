@@ -10,7 +10,7 @@ Era necessário armazenar os diagramas enviados pelos usuários e os relatórios
 
 ## Discussão e possibilidades
 
-O Amazon S3 é o padrão da AWS para armazenamento de objetos. Tem durabilidade de 99.999999999% (11 noves), suporte nativo a presigned URLs (ver [ADR 0020](0020_adr_presigned_urls_do_s3.md)) e integração direta com IAM para controle de acesso.
+O Amazon S3 é o padrão da AWS para armazenamento de objetos. Tem durabilidade de 99.999999999% (11 noves), suporte nativo a presigned URLs (Veja [ADR 0020 - Presigned URLs do S3](0020_adr_presigned_urls_do_s3.md)) e integração direta com IAM para controle de acesso.
 
 Considerei duas alternativas:
 
@@ -23,7 +23,7 @@ O S3 resolve o problema de forma simples e com custo mínimo.
 
 Foi decidido utilizar o Amazon S3 como armazenamento de arquivos para diagramas enviados e relatórios gerados.
 
-O bucket é provisionado via Terraform no repositório de infraestrutura (`fiap-12soat-projeto-fase-5-infra`). O Upload envia arquivos ao S3 via SDK, e o Relatório lê do S3 para download e escreve Markdown/PDF no S3.
+O bucket é provisionado via Terraform no repositório de infraestrutura. O Upload envia arquivos ao S3 via SDK, e o Relatório lê do S3 para download e escreve Markdown/PDF no S3.
 
 ## Consequências
 
@@ -35,7 +35,7 @@ O bucket é provisionado via Terraform no repositório de infraestrutura (`fiap-
 
 **Negativas:**
 
-* Dependência do S3 da AWS. Trocar de provider exigiria adaptar a camada de armazenamento.
+* Nenhuma considerando que já estamos no ecossistema AWS.
 
 ---
 Anterior: [ADR 0006 - Campos Mapeados como JSONB](0006_adr_campos_mapeados_como_jsonb.md)  
